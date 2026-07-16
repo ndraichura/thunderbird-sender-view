@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sender View</title>
+  <link rel="stylesheet" href="senderview.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="left">
+      <header id="left-header">
+        <input id="filter" type="search" placeholder="Filter senders…" autocomplete="off">
+        <button id="unread-first-toggle">Unread first</button>
+        <button id="refresh" title="Refresh">⟳</button>
+      </header>
+      <div id="sender-list" role="listbox" aria-label="Senders"></div>
+      <footer id="status"></footer>
+    </aside>
+    <div id="pane-divider" title="Drag to resize"></div>
+    <main id="right">
+      <header id="conv-header" hidden>
+        <div id="conv-title">
+          <div id="conv-name"></div>
+          <div id="conv-email"></div>
+        </div>
+        <div id="conv-actions">
+          <span id="conv-count"></span>
+          <button id="mark-all-read" hidden>Mark all read</button>
+          <button id="sort-toggle" title="Toggle sort order"></button>
+        </div>
+      </header>
+      <div id="conv-list"></div>
+      <div id="conv-empty">Select a sender to view your message history.</div>
+      <footer id="reply-bar" hidden>
+        <div id="reply-chip">
+          <span id="reply-chip-text"></span>
+          <button id="reply-chip-clear" title="Reply to the latest message instead" hidden>✕</button>
+        </div>
+        <div id="reply-row">
+          <textarea id="reply-text" rows="2" placeholder="Quick reply…"></textarea>
+          <div id="reply-actions">
+            <button id="reply-full" title="Open Thunderbird's compose window (attachments, CC/BCC, formatting)">Full compose ↗</button>
+            <button id="reply-send" title="Send quick reply (Ctrl+Enter)">Send</button>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+  <script src="senderview.js"></script>
+</body>
+</html>
