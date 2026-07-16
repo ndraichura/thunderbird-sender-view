@@ -1,7 +1,6 @@
 # Sender View — Thunderbird Extension (Phase 3 — feature complete)
 
 Chat-style, person-centric view of Inbox + Sent across all accounts.
-See [thunderbird-sender-view-spec.md](thunderbird-sender-view-spec.md) for the full spec.
 
 **Phase 3 (this build)** completes the spec with reply/compose integration:
 

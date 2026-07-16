@@ -5,9 +5,8 @@
 A Thunderbird WebExtension that adds a chat-style, **person-centric email view**: a
 spaces-rail tab with a left pane of unique senders and a right pane showing the full
 conversation (Inbox + Sent interleaved) with the selected person, across all accounts.
-Full requirements: [thunderbird-sender-view-spec.md](thunderbird-sender-view-spec.md).
-All three spec phases are implemented, plus several post-spec features (see version
-history). User-facing docs: [README.md](README.md).
+All three original spec phases are implemented, plus several post-spec features (see
+version history below). User-facing docs: [README.md](README.md).
 
 - **Target:** Thunderbird 140+ (user runs 152.x, monthly channel), Manifest V3.
 - **Stack:** plain HTML/CSS/JS, no build tooling, no dependencies, no bundler.
