@@ -31,3 +31,6 @@ web-ext-artifacts/
 
 # Logs
 *.log
+
+# Internal planning doc — not for the public repo
+thunderbird-sender-view-spec.md
