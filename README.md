@@ -1,100 +1,99 @@
-# Sender View — Thunderbird Extension (Phase 3 — feature complete)
+# Sender View
 
-Chat-style, person-centric view of Inbox + Sent across all accounts.
+A Thunderbird add-on that gives you a chat-style, person-centric way to read your mail:
+instead of one long inbox list, you get a contact list of everyone you've exchanged mail
+with, and clicking a person shows your entire conversation with them — inbox and sent mail
+interleaved, newest at the bottom or top as per your preference.
 
-**Phase 3 (this build)** completes the spec with reply/compose integration:
+## Features
 
-- **Quick reply bar** at the bottom of the conversation pane: type and hit
-  Send (or Ctrl+Enter). The reply goes through Thunderbird's real compose
-  pipeline (`compose.beginReply` → `sendMessage`), so threading headers
-  (In-Reply-To/References) are native-correct and your text is placed above
-  the quoted original. A compose window flashes briefly during send — that's
-  the native pipeline doing the work. Unsent text is kept as a per-sender
-  draft while the tab is open; on failure the compose window stays open with
-  your text.
-- **Per-message reply targeting** (v0.5.0): every message has an ↩ button
-  that aims the quick-reply bar at *that* message, so replies thread under
-  the email you chose (the targeted bubble is outlined; ✕ returns to the
-  default latest-message target, which resets automatically after sending).
-  The chip above the box always shows the current target and the computed
-  **reply-all audience**; it turns amber when the reply would reach more than
-  one person — use Full compose to prune recipients in that case. ↩ on your
-  own sent messages replies to their original recipients (native behavior).
-- **Full compose ↗** hands off to Thunderbird's native compose window
-  (pre-filled with recipient + quoted context, carrying over anything you
-  typed in the quick-reply box) for attachments, CC/BCC, formatting.
-- Sent replies appear in the conversation immediately (Sent-folder events +
-  `compose.onAfterSend`).
-- Senders you've only ever written to get `beginNew` with a "Re:" subject
-  instead of a reply (nothing to reply to).
+- **One conversation per person.** Every sender is grouped by email address across all
+  your accounts, merging display-name variants ("Groupon" and "Groupon Deals" from the
+  same address become one contact). Unread senders float to the top; a toggle switches to
+  pure recency if you prefer that.
+- **Read messages inline.** Message bodies open right in the conversation — HTML mail
+  renders safely (see [Privacy & security](#privacy--security) below), the newest message
+  auto-expands, older ones expand on click. Attachments show as chips that open the
+  message in Thunderbird's native reader.
+- **Reply without leaving the view.** A quick-reply box at the bottom sends through
+  Thunderbird's real compose pipeline, so it threads correctly. Click ↩ on any message
+  (including older ones) to reply to that specific email instead of the latest one — a
+  chip always shows who the reply will actually reach, with a warning if it's more than
+  one person. Need attachments, CC/BCC, or formatting? "Full compose" hands off to
+  Thunderbird's normal compose window, carrying over anything you've typed.
+- **Stay in sync with Thunderbird.** Marking read/unread, archiving, deleting, and
+  reporting spam all use Thunderbird's real mail actions (delete goes to Trash, never
+  permanent) and update instantly in both directions — actions taken here show up in
+  Thunderbird's folder view and vice versa, live, without reopening the tab.
+- **Everything persists.** Your sort preferences, last-viewed conversation, scroll
+  position, and pane width are remembered across restarts.
 
-- **"Unread first" toggle** (v0.5.1) above the sender list: on (default) groups
-  unread senders at the top; off sorts purely by most recent message. Persists
-  across sessions.
-- **Archive / Spam / Delete actions** (v0.6.0): 📦 🚫 🗑 on every message
-  bubble (instant) and on every sender row (bulk over that sender's *received*
-  messages, with a confirmation showing the count). Delete always moves to
-  Trash — never permanent. Spam flags messages as junk *and* moves them to the
-  account's Junk folder. Actioned mail disappears from the view automatically
-  via the live folder events. Requires the `messagesMove` and `messagesDelete`
-  permissions (prompted on install).
+## Privacy & security
 
-**Phase 2** features:
+- **No network calls, ever** — except one explicit, per-click exception: if a message has
+  blocked images (see below), you can choose to load them for that message. Nothing else
+  in the extension talks to the internet.
+- **Remote images are blocked by default**, the same way Thunderbird's own reader blocks
+  them, since they can be used to track whether/when you opened a message. A banner tells
+  you how many were blocked with a **Load remote content** button if you want them anyway
+  — the choice is per message and doesn't persist.
+- **HTML mail is sandboxed.** Message content renders in an isolated frame with scripts
+  and event handlers always stripped, regardless of whether you've loaded remote images.
+- **Junk, Trash, and Archive folders never appear** in the view — only Inbox and Sent are
+  read.
 
-- **Read/unread actions**: clicking to expand an unread message marks it read
-  (the auto-expanded newest message deliberately does not); per-message
-  read/unread toggle (✓/✉); "Mark all read" per sender. All synced to
-  Thunderbird via `messages.update`.
-- **Live updates**: new mail, read-state changes made in native Thunderbird,
-  moves and deletions all stream in via `messages.on*` events — no manual
-  refresh needed while the tab is open. Chat view stays pinned to the newest
-  message if you're already at the bottom.
-- **Incremental loading**: conversations render the newest 60 messages; older
-  ones load on scroll or via the "Show older" pill.
-- **Persistent UI state**: last selected sender, conversation scroll position,
-  sort order, and pane width (drag the divider between panes) survive restarts.
+### Permissions this add-on requests, and why
 
-Still true: HTML mail renders in a sandboxed iframe (scripts stripped/blocked,
-remote images/trackers blocked via CSP), links open in the system browser,
-no Junk/Trash/Archive folders in view. One user-initiated exception to the
-no-network rule (v0.6.1): when a message has blocked remote content, a banner
-shows the count with a **Load remote content** button — clicking it re-renders
-that one message with remote *images* allowed (scripts stay stripped in all
-modes). Per message, per session; nothing loads without the click.
-
-## Try it (temporary, for development)
-
-1. Thunderbird ▸ ☰ menu ▸ **Add-ons and Themes** ▸ gear icon ▸ **Debug Add-ons**
-   (or Tools ▸ Developer Tools ▸ Debug Add-ons).
-2. **Load Temporary Add-on…** ▸ select `manifest.json` in this folder.
-3. A **Sender View** button appears in the left spaces rail — click it.
-
-Temporary add-ons unload when Thunderbird closes.
-
-## Install permanently
-
-1. Thunderbird ▸ **Add-ons and Themes** ▸ gear icon ▸ **Install Add-on From File…**
-2. Select `sender-view-0.6.3.xpi`.
-3. If Thunderbird refuses unsigned add-ons, this is a Release-channel
-   restriction; on current Thunderbird, unsigned local installs are normally
-   allowed and it will just show a confirmation prompt.
-
-## Files
-
-| File | Purpose |
+| Permission | Why |
 |---|---|
-| `manifest.json` | MV3 MailExtension manifest (`messagesRead`, `messagesUpdate`, `messagesMove`, `messagesDelete`, `accountsRead`, `storage`, `compose`, `compose.send`) |
-| `background.js` | Registers the Sender View space in the spaces rail |
-| `senderview/` | The tab UI: query, grouping, rendering |
-| `icons/senderview.svg` | Space/extension icon |
+| `messagesRead` | Read your Inbox/Sent messages to build the conversation view |
+| `messagesUpdate` | Mark messages read/unread, flag as junk |
+| `messagesMove` | Archive messages, move spam to your Junk folder |
+| `messagesDelete` | Delete messages (to Trash) |
+| `accountsRead` | Discover your accounts' Inbox/Sent/Junk folders |
+| `storage` | Remember your preferences locally |
+| `compose`, `compose.send` | Send replies through Thunderbird's compose pipeline |
+
+## Installing
+
+**From addons.thunderbird.net:** not yet published there — for now, install from a
+release below.
+
+**From a downloaded `.xpi`:**
+1. Thunderbird ▸ **Add-ons and Themes** ▸ gear icon ▸ **Install Add-on From File…**
+2. Select the `.xpi` file.
+3. If Thunderbird warns about an unsigned add-on, confirm the install — this is normal
+   for add-ons installed outside the official store.
+
+**Trying it from source (for development):**
+1. Thunderbird ▸ ☰ menu ▸ **Add-ons and Themes** ▸ gear icon ▸ **Debug Add-ons**.
+2. **Load Temporary Add-on…** ▸ select `manifest.json` from this repo.
+3. It unloads when Thunderbird closes — use the `.xpi` install above for something
+   permanent.
+
+Requires Thunderbird 140 or later.
+
+## Using it
+
+- Click the **Sender View** icon in the left spaces rail to open the tab.
+- The left pane lists everyone you've mailed or been mailed by; type in **Filter senders**
+  to search, or toggle **Unread first** off for pure chronological order.
+- Click a sender to open the conversation on the right. Toggle **Oldest first / Newest
+  first** to change reading direction.
+- Click a message bubble to expand or collapse it. Use the ✓/✉ button to mark it
+  read/unread, or 📦 / 🗑 / 🚫 to archive, delete, or mark as spam — each also has a
+  sender-level version above the conversation to act on every message from that person at
+  once.
+- Type in the box at the bottom to reply; **Send** or **Ctrl+Enter** sends it. Click ↩ on
+  any message first if you want to reply to that one specifically instead of the latest.
+- **Full compose ↗** opens Thunderbird's normal compose window when you need attachments,
+  CC/BCC, or formatting.
 
 ## License
 
 Mozilla Public License 2.0 — see [LICENSE](LICENSE).
 
-## Status
+## For developers
 
-All three spec phases are implemented. Skipped by design: unread badge on the
-spaces-rail button (needs a persistent background observer and duplicates
-native Thunderbird badges); attachment access from the inline view (chips
-open the native reader instead).
+Architecture notes, locked product decisions, the testing workflow, and version history
+live in [CLAUDE.md](CLAUDE.md).

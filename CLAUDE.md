@@ -112,8 +112,9 @@ version history below). User-facing docs: [README.md](README.md).
 - **Packaging:** zip via .NET `System.IO.Compression` with **forward-slash entry names**
   (`Compress-Archive` writes backslashes, which Thunderbird can reject), manifest at zip
   root, named `sender-view-<version>.xpi`; delete the previous xpi. Bump
-  `manifest.json` version on every user-visible change and keep the README's xpi filename
-  in sync.
+  `manifest.json` version on every user-visible change. README's install instructions
+  deliberately don't pin a version/filename — keep it that way so releases don't require
+  a doc edit.
 - **Live testing** is the user's step: Thunderbird ▸ Add-ons ▸ Debug Add-ons ▸ Load
   Temporary Add-on ▸ `manifest.json`. Permission additions prompt on xpi install.
 - Real-profile scale reference: ~785 senders / ~24k messages loads in a few seconds.
