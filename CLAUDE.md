@@ -136,3 +136,6 @@ version history below). User-facing docs: [README.md](README.md).
 - **0.6.1** Per-message "Load remote content" banner (images only, session-scoped).
 - **0.6.2** Public-release prep: trademark references scrubbed, MPL-2.0 license added.
 - **0.6.3** Permanent UUID add-on id (replaces the initial domain-style placeholder).
+- **0.7.0** Per-sender conversation search: a search bar atop the right pane filters the
+  selected sender's messages by subject + body text (bodies indexed lazily on demand),
+  with matches highlighted (`<mark>`). Resets when the sender selection changes.

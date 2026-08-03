@@ -25,6 +25,9 @@ interleaved, newest at the bottom or top as per your preference.
   reporting spam all use Thunderbird's real mail actions (delete goes to Trash, never
   permanent) and update instantly in both directions — actions taken here show up in
   Thunderbird's folder view and vice versa, live, without reopening the tab.
+- **Search within a conversation.** A search bar above the conversation filters that
+  sender's messages by subject and body text, with matches highlighted — separate from the
+  sender-list filter, which searches across people instead.
 - **Everything persists.** Your sort preferences, last-viewed conversation, scroll
   position, and pane width are remembered across restarts.
 
@@ -79,7 +82,8 @@ Requires Thunderbird 140 or later.
 - The left pane lists everyone you've mailed or been mailed by; type in **Filter senders**
   to search, or toggle **Unread first** off for pure chronological order.
 - Click a sender to open the conversation on the right. Toggle **Oldest first / Newest
-  first** to change reading direction.
+  first** to change reading direction, or type in the search bar above it to filter that
+  conversation to matching messages.
 - Click a message bubble to expand or collapse it. Use the ✓/✉ button to mark it
   read/unread, or 📦 / 🗑 / 🚫 to archive, delete, or mark as spam — each also has a
   sender-level version above the conversation to act on every message from that person at

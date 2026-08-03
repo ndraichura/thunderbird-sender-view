@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sender View",
   "description": "Chat-style, person-centric view of your Inbox and Sent mail across all accounts.",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "browser_specific_settings": {
     "gecko": {
       "id": "{79c9baab-f570-4e8a-9721-82d2d2fab86c}",

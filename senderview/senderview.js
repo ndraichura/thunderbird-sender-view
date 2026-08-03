@@ -25,6 +25,8 @@ const state = {
   sortAsc: true,            // conversation pane: true = oldest first (chat-style)
   unreadFirst: true,        // sender list: group unread senders at the top
   filterText: "",
+  convSearch: "",           // right-pane search: filters the selected sender's messages
+  searchGen: 0,             // cancels stale async search-indexing runs
   loading: false,
   totalMessages: 0,
   listRenderGen: 0,         // cancels stale chunked renders
@@ -50,6 +52,8 @@ const remoteAllowed = new Set(); // messageIds the user opted into remote conten
 const msgIndex = new Map();  // messageId -> [{group, msg}]
 const bodyCache = new Map(); // messageId -> {html, text, attachments, snippet, error}
 const BODY_CACHE_MAX = 300;
+const searchIndex = new Map(); // messageId -> lowercased "subject\nbody text", for conv search
+let activeIndexingGen = null; // searchGen currently being indexed, guards against overlapping runs
 
 const els = {
   filter: document.getElementById("filter"),
@@ -63,6 +67,9 @@ const els = {
   convName: document.getElementById("conv-name"),
   convEmail: document.getElementById("conv-email"),
   convCount: document.getElementById("conv-count"),
+  convSearchBar: document.getElementById("conv-search-bar"),
+  convSearch: document.getElementById("conv-search"),
+  convSearchCount: document.getElementById("conv-search-count"),
   markAllRead: document.getElementById("mark-all-read"),
   sortToggle: document.getElementById("sort-toggle"),
   convList: document.getElementById("conv-list"),
@@ -97,6 +104,16 @@ async function init() {
   });
   els.refresh.addEventListener("click", () => loadAll());
   els.unreadFirstToggle.addEventListener("click", toggleUnreadFirst);
+  let searchDebounce = null;
+  els.convSearch.addEventListener("input", () => {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      searchDebounce = null;
+      state.convSearch = els.convSearch.value.trim().toLowerCase();
+      state.searchGen++;
+      renderConversation({ mode: "preserve" });
+    }, 150);
+  });
   els.sortToggle.addEventListener("click", toggleSort);
   els.markAllRead.addEventListener("click", markAllRead);
   els.convList.addEventListener("scroll", () => {
@@ -339,6 +356,7 @@ function removeMessageById(id) {
   if (!entries) return [];
   msgIndex.delete(id);
   bodyCache.delete(id);
+  searchIndex.delete(id);
   audienceCache.delete(id);
   headerCache.delete(id);
   remoteAllowed.delete(id);
@@ -748,7 +766,7 @@ function parseAddress(raw) {
 async function fetchBody(messageId) {
   if (bodyCache.has(messageId)) return bodyCache.get(messageId);
 
-  const entry = { html: null, text: null, attachments: [], snippet: null, error: null };
+  const entry = { html: null, text: null, attachments: [], snippet: null, plainText: null, error: null };
   try {
     const parts = await browser.messages.listInlineTextParts(messageId);
     for (const part of parts || []) {
@@ -780,10 +798,10 @@ async function fetchBody(messageId) {
   return entry;
 }
 
-async function snippetFor(messageId) {
-  const entry = await fetchBody(messageId);
-  if (entry.snippet !== null) return entry.snippet;
-
+// Full plain-text body, cached on the bodyCache entry. Shared by the
+// collapsed-bubble snippet (truncated) and conversation search (full text).
+async function plainTextFor(entry) {
+  if (entry.plainText !== null) return entry.plainText;
   let text = entry.text;
   if (!text && entry.html) {
     try {
@@ -794,9 +812,24 @@ async function snippetFor(messageId) {
       text = doc.body ? doc.body.textContent : "";
     }
   }
-  const snippet = (text || "").replace(/\s+/g, " ").trim().slice(0, 160);
+  entry.plainText = text || "";
+  return entry.plainText;
+}
+
+async function snippetFor(messageId) {
+  const entry = await fetchBody(messageId);
+  if (entry.snippet !== null) return entry.snippet;
+  const text = await plainTextFor(entry);
+  const snippet = text.replace(/\s+/g, " ").trim().slice(0, 160);
   entry.snippet = snippet;
   return snippet;
+}
+
+// Lowercased "subject\nbody text" used by the conversation search index.
+async function searchableTextFor(msg) {
+  const entry = await fetchBody(msg.id);
+  const text = await plainTextFor(entry);
+  return (msg.subject + "\n" + text).toLowerCase();
 }
 
 /* ---------------- HTML sanitizing + sandboxed rendering ---------------- */
@@ -1005,6 +1038,14 @@ function selectSender(key) {
   state.expandedIds = new Set();
   state.expandInit = false;
   state.convLimit = CONV_PAGE;
+  state.convSearch = "";
+  state.searchGen++;
+  els.convSearch.value = "";
+  // The search index only ever covers the selected sender's messages, so
+  // clearing it here bounds its size to one sender instead of accumulating
+  // across every sender ever searched. Re-indexing on revisit is cheap since
+  // fetchBody/plainTextFor results are still cached.
+  searchIndex.clear();
   for (const row of els.senderList.children) {
     row.classList.toggle("selected", row.dataset.key === key);
   }
@@ -1026,6 +1067,7 @@ function renderConversation(opts = {}) {
 
   if (!group) {
     els.convHeader.hidden = true;
+    els.convSearchBar.hidden = true;
     els.replyBar.hidden = true;
     els.convList.textContent = "";
     els.convEmpty.classList.remove("hidden");
@@ -1033,6 +1075,7 @@ function renderConversation(opts = {}) {
   }
 
   els.convHeader.hidden = false;
+  els.convSearchBar.hidden = false;
   els.convEmpty.classList.add("hidden");
   els.convName.textContent = group.name;
   els.convEmail.textContent = group.email;
@@ -1047,17 +1090,32 @@ function renderConversation(opts = {}) {
   }
   updateReplyChip();
 
-  const all = [...group.messages].sort((a, b) =>
+  const rawAll = [...group.messages].sort((a, b) =>
     state.sortAsc ? a.timestamp - b.timestamp : b.timestamp - a.timestamp
   );
 
   // First render for this sender: auto-expand the newest message
   // (deliberately NOT marked read — see user decision).
-  if (!state.expandInit && all.length > 0) {
-    const newest = all.reduce((a, b) => (b.timestamp > a.timestamp ? b : a));
+  if (!state.expandInit && rawAll.length > 0) {
+    const newest = rawAll.reduce((a, b) => (b.timestamp > a.timestamp ? b : a));
     state.expandedIds.add(newest.id);
     state.expandInit = true;
   }
+
+  // Right-pane search: scopes the conversation to messages whose subject or
+  // body text matches. Subjects match instantly; body text is indexed lazily
+  // (fetched + cached on demand) since bodies aren't loaded up front.
+  const q = state.convSearch;
+  let all = rawAll;
+  let pendingIndex = 0;
+  if (q) {
+    all = rawAll.filter((msg) => matchesSearch(msg, q));
+    for (const msg of rawAll) {
+      if (!searchIndex.has(msg.id) && !msg.subject.toLowerCase().includes(q)) pendingIndex++;
+    }
+    runSearchIndexing(group, q);
+  }
+  updateSearchCount(q, all.length, pendingIndex);
 
   // Only the newest convLimit messages are rendered; older ones sit behind
   // a "show older" row at the old end of the list.
@@ -1070,12 +1128,16 @@ function renderConversation(opts = {}) {
 
   els.convList.textContent = "";
   const fragment = document.createDocumentFragment();
-  const olderRow = hiddenCount > 0 ? buildOlderRow(hiddenCount) : null;
-  if (olderRow && state.sortAsc) fragment.appendChild(olderRow);
-  for (const msg of visible) {
-    fragment.appendChild(buildMessageRow(msg, group));
+  if (q && all.length === 0) {
+    fragment.appendChild(buildSearchEmptyRow(pendingIndex > 0));
+  } else {
+    const olderRow = hiddenCount > 0 ? buildOlderRow(hiddenCount) : null;
+    if (olderRow && state.sortAsc) fragment.appendChild(olderRow);
+    for (const msg of visible) {
+      fragment.appendChild(buildMessageRow(msg, group));
+    }
+    if (olderRow && !state.sortAsc) fragment.appendChild(olderRow);
   }
-  if (olderRow && !state.sortAsc) fragment.appendChild(olderRow);
   els.convList.appendChild(fragment);
 
   if (state.pendingScrollRestore !== null) {
@@ -1101,6 +1163,80 @@ function updateConvHeaderCounts(group) {
   els.markAllRead.hidden = group.unread === 0;
   if (group.unread > 0) {
     els.markAllRead.textContent = `Mark all read (${group.unread})`;
+  }
+}
+
+// Subject matches instantly; body matches only once the message has been
+// indexed by runSearchIndexing (until then it simply won't match yet).
+function matchesSearch(msg, q) {
+  if (msg.subject.toLowerCase().includes(q)) return true;
+  const indexed = searchIndex.get(msg.id);
+  return indexed ? indexed.includes(q) : false;
+}
+
+function updateSearchCount(q, matchCount, pendingIndex) {
+  if (!q) {
+    els.convSearchCount.textContent = "";
+    return;
+  }
+  const plural = matchCount === 1 ? "match" : "matches";
+  els.convSearchCount.textContent = pendingIndex > 0
+    ? `Searching… ${matchCount} ${plural} so far`
+    : `${matchCount} ${plural}`;
+}
+
+function buildSearchEmptyRow(stillIndexing) {
+  const row = document.createElement("div");
+  row.className = "search-empty-row";
+  row.textContent = stillIndexing ? "Searching…" : "No messages match your search.";
+  return row;
+}
+
+// Lazily indexes this sender's not-yet-indexed messages (subject + body
+// text) so body-only matches can surface. Generation-guarded so a changed
+// or cleared query cancels the re-render its predecessor was waiting on.
+async function runSearchIndexing(group, q) {
+  const gen = state.searchGen;
+  // renderConversation() re-invokes this on every render (scroll, sort, live
+  // updates, not just typing), so a run for this generation may already be
+  // in flight — skip rather than spin up a second worker pool over the same
+  // not-yet-indexed messages.
+  if (activeIndexingGen === gen) return;
+  const targets = group.messages.filter((msg) => !searchIndex.has(msg.id));
+  if (targets.length === 0) return;
+
+  activeIndexingGen = gen;
+  try {
+    const queue = [...targets];
+    const worker = async () => {
+      for (;;) {
+        if (gen !== state.searchGen) return;
+        const msg = queue.shift();
+        if (!msg) return;
+        let text;
+        try {
+          text = await searchableTextFor(msg);
+        } catch (e) {
+          console.warn("search indexing failed for", msg.id, e);
+          // Fall back to the subject alone so this message isn't retried forever.
+          text = msg.subject.toLowerCase();
+        }
+        // Re-check after the await: a sender switch (or generation change)
+        // may have cleared searchIndex while this fetch was in flight — don't
+        // repopulate an index that no longer belongs to the active sender.
+        if (gen !== state.searchGen) return;
+        searchIndex.set(msg.id, text);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(6, targets.length) }, worker));
+  } finally {
+    // Only clear if we still own the flag: a newer generation's run may have
+    // already taken over while this (superseded) run was winding down.
+    if (activeIndexingGen === gen) activeIndexingGen = null;
+  }
+
+  if (gen === state.searchGen && state.convSearch === q) {
+    renderConversation({ mode: "preserve" });
   }
 }
 
@@ -1148,6 +1284,33 @@ function primeVisibleSnippets() {
       loadSnippet(el);
     }
   }
+}
+
+// Renders text into el, wrapping case-insensitive matches of q in <mark>.
+// Always builds via text nodes/elements — never innerHTML — since this runs
+// on message-derived content (subjects, snippets).
+function setHighlightedText(el, text, q) {
+  el.textContent = "";
+  if (!q) {
+    el.textContent = text;
+    return;
+  }
+  const lower = text.toLowerCase();
+  let start = 0;
+  let idx = lower.indexOf(q, start);
+  if (idx === -1) {
+    el.textContent = text;
+    return;
+  }
+  while (idx !== -1) {
+    if (idx > start) el.appendChild(document.createTextNode(text.slice(start, idx)));
+    const mark = document.createElement("mark");
+    mark.textContent = text.slice(idx, idx + q.length);
+    el.appendChild(mark);
+    start = idx + q.length;
+    idx = lower.indexOf(q, start);
+  }
+  if (start < text.length) el.appendChild(document.createTextNode(text.slice(start)));
 }
 
 function decorateReadButton(btn, read) {
@@ -1231,7 +1394,7 @@ function buildMessageRow(msg, group) {
 
   const subject = document.createElement("div");
   subject.className = "msg-subject";
-  subject.textContent = msg.subject;
+  setHighlightedText(subject, msg.subject, state.convSearch);
 
   row.append(head, subject);
 
@@ -1386,7 +1549,7 @@ async function loadSnippet(el) {
     if (!el.isConnected) return;
     const list = els.convList;
     const wasAtBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 12;
-    el.textContent = snippet;
+    setHighlightedText(el, snippet, state.convSearch);
     // Filling text grows the list; don't let that pull a bottom-pinned
     // chat view away from the newest message.
     if (state.sortAsc && wasAtBottom) list.scrollTop = list.scrollHeight;
