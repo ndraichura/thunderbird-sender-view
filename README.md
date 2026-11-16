@@ -80,6 +80,9 @@ Requires Thunderbird 140 or later.
   to search, or toggle **Unread first** off for pure chronological order.
 - Click a sender to open the conversation on the right. Toggle **Oldest first / Newest
   first** to change reading direction.
+- Enable **Mark read on selection** beside the conversation controls to mark the
+  automatically expanded message as read when selecting a sender. This preference is
+  saved and off by default; restoring the previous conversation does not mark it read.
 - Click a message bubble to expand or collapse it. Use the ✓/✉ button to mark it
   read/unread, or 📦 / 🗑 / 🚫 to archive, delete, or mark as spam — each also has a
   sender-level version above the conversation to act on every message from that person at
