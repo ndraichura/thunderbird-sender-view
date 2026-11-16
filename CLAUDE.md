@@ -65,8 +65,9 @@ version history below). User-facing docs: [README.md](README.md).
   Scripts stay stripped in ALL modes. User text is always inserted via
   `textContent`/text nodes — never innerHTML.
 - **Read/unread:** optimistic `applyReadState()` + `messages.update`; native changes come
-  back via `onUpdated` (idempotent echo). Click-expand marks read; the auto-expanded
-  newest message deliberately does NOT.
+  back via `onUpdated` (idempotent echo). Click-expand marks read. The auto-expanded
+  newest message is marked read on sender selection only when `markReadOnSelect` is
+  enabled (off by default); session restoration never marks it read.
 - **Reply pipeline:** `beginComposeFor()` → `compose.beginReply(target.id, "replyToAll")`
   (or `beginNew` with `Re:` subject for sent-only contacts) → `injectReplyText()` places
   typed text above the native quote (respects `isPlainText`) → `sendMessage({mode:
@@ -83,8 +84,8 @@ version history below). User-facing docs: [README.md](README.md).
   `messages.archive`. Received messages only for spam. UI removal is event-driven
   (onMoved/onDeleted), not optimistic.
 - **Persistence (`storage.local`):** `convSortAsc`, `unreadFirst`, `lastSelectedKey`,
-  `convScrollTop`, `paneWidth`. In-memory only: drafts per sender, expanded ids,
-  remote-content opt-ins.
+  `convScrollTop`, `paneWidth`, `markReadOnSelect`. In-memory only: drafts per sender,
+  expanded ids, remote-content opt-ins.
 
 ## Locked product decisions (do not re-litigate without the user)
 

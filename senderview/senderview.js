@@ -24,6 +24,7 @@ const state = {
   selectedKey: null,
   sortAsc: true,            // conversation pane: true = oldest first (chat-style)
   unreadFirst: true,        // sender list: group unread senders at the top
+  markReadOnSelect: false,  // mark the auto-expanded message read on sender selection
   filterText: "",
   loading: false,
   totalMessages: 0,
@@ -64,6 +65,7 @@ const els = {
   convEmail: document.getElementById("conv-email"),
   convCount: document.getElementById("conv-count"),
   markAllRead: document.getElementById("mark-all-read"),
+  markReadOnSelect: document.getElementById("mark-read-on-select"),
   sortToggle: document.getElementById("sort-toggle"),
   convList: document.getElementById("conv-list"),
   convEmpty: document.getElementById("conv-empty"),
@@ -99,6 +101,10 @@ async function init() {
   els.unreadFirstToggle.addEventListener("click", toggleUnreadFirst);
   els.sortToggle.addEventListener("click", toggleSort);
   els.markAllRead.addEventListener("click", markAllRead);
+  els.markReadOnSelect.addEventListener("change", async () => {
+    state.markReadOnSelect = els.markReadOnSelect.checked;
+    await browser.storage.local.set({ markReadOnSelect: state.markReadOnSelect });
+  });
   els.convList.addEventListener("scroll", () => {
     if (state.snippetScrollTimer) return;
     state.snippetScrollTimer = setTimeout(() => {
@@ -130,12 +136,15 @@ async function init() {
   state.saved = await browser.storage.local.get({
     convSortAsc: true,
     unreadFirst: true,
+    markReadOnSelect: false,
     lastSelectedKey: null,
     convScrollTop: null,
     paneWidth: null,
   });
   state.sortAsc = Boolean(state.saved.convSortAsc);
   state.unreadFirst = Boolean(state.saved.unreadFirst);
+  state.markReadOnSelect = Boolean(state.saved.markReadOnSelect);
+  els.markReadOnSelect.checked = state.markReadOnSelect;
   updateSortButton();
   updateUnreadFirstButton();
   if (state.saved.paneWidth) {
@@ -250,7 +259,7 @@ function restoreSelection() {
   if (key && state.groups.has(key)) {
     state.pendingScrollRestore =
       typeof state.saved.convScrollTop === "number" ? state.saved.convScrollTop : null;
-    selectSender(key);
+    selectSender(key, { markRead: false });
   }
 }
 
@@ -996,7 +1005,7 @@ function buildSenderRow(group) {
   return row;
 }
 
-function selectSender(key) {
+function selectSender(key, { markRead = state.markReadOnSelect } = {}) {
   if (state.selectedKey && state.selectedKey !== key) {
     stashDraft();
   }
@@ -1009,7 +1018,7 @@ function selectSender(key) {
     row.classList.toggle("selected", row.dataset.key === key);
   }
   browser.storage.local.set({ lastSelectedKey: key });
-  renderConversation();
+  renderConversation({ markRead });
 }
 
 /* ---------------- conversation rendering ---------------- */
@@ -1051,12 +1060,15 @@ function renderConversation(opts = {}) {
     state.sortAsc ? a.timestamp - b.timestamp : b.timestamp - a.timestamp
   );
 
-  // First render for this sender: auto-expand the newest message
-  // (deliberately NOT marked read — see user decision).
+  // First render for this sender: auto-expand the newest message.
+  // Only explicit sender selection can mark it read, when opted in.
   if (!state.expandInit && all.length > 0) {
     const newest = all.reduce((a, b) => (b.timestamp > a.timestamp ? b : a));
     state.expandedIds.add(newest.id);
     state.expandInit = true;
+    if (opts.markRead && !newest.isSent && !newest.read) {
+      setRead(newest.id, true);
+    }
   }
 
   // Only the newest convLimit messages are rendered; older ones sit behind
